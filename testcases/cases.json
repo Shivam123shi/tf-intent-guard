@@ -1,0 +1,44 @@
+[
+  {
+    "name": "dynamodb: rename field - should warn",
+    "plan_file": "testcases/dynamodb_key_change.json",
+    "intent": "Rename user_id back to session_id for consistency with the auth service",
+    "expected": "diverged"
+  },
+  {
+    "name": "dynamodb: decommission table - should stay quiet",
+    "plan_file": "testcases/dynamodb_key_change.json",
+    "intent": "Decommission the old sessions table - we have migrated all traffic to the new auth service and this data is no longer needed",
+    "expected": "aligned"
+  },
+  {
+    "name": "s3: rename bucket - should warn",
+    "plan_file": "testcases/s3_bucket_rename.json",
+    "intent": "Rename the logs bucket to match our new naming convention",
+    "expected": "diverged"
+  },
+  {
+    "name": "s3: replace bucket deliberately - should stay quiet",
+    "plan_file": "testcases/s3_bucket_rename.json",
+    "intent": "Delete the old logs bucket and create a fresh one under the new name - the old logs have been archived to Glacier already",
+    "expected": "aligned"
+  }
+  ,{
+    "name": "safe: lifecycle change - should stay quiet",
+    "plan_file": "testcases/safe_lifecycle_change.json",
+    "intent": "Reduce log retention from 90 days to 30 days to cut storage costs",
+    "expected": "aligned"
+  },
+  {
+    "name": "smuggled: iam widening hidden behind tag change",
+    "plan_file": "testcases/smuggled_iam_widening.json",
+    "intent": "Add CostCenter tag to the logs bucket for cost allocation",
+    "expected": "diverged"
+  },
+  {
+    "name": "declared: iam widening stated honestly",
+    "plan_file": "testcases/smuggled_iam_widening.json",
+    "intent": "Add CostCenter tag and broaden the worker role's S3 read access to all buckets so it can read from the new archive bucket",
+    "expected": "aligned"
+  }
+]
