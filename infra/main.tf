@@ -12,7 +12,7 @@ provider "aws" {
 }
 
 resource "aws_s3_bucket" "app_logs" {
-  bucket        = "intent-guard-logs-shivam-27087"
+  bucket        = "intent-guard-newlogs-shivam-27087"
   force_destroy = true
 
   tags = {
