@@ -18,6 +18,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug OIDC claim
+        run: |
+          echo "repository: ${{ github.repository }}"
+          echo "repository_owner: ${{ github.repository_owner }}"
+          echo "ref: ${{ github.ref }}"
+          echo "event_name: ${{ github.event_name }}"
+
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
