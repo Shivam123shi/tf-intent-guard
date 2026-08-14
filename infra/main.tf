@@ -5,6 +5,12 @@ terraform {
       version = "~> 5.0"
     }
   }
+  backend "s3" {
+    bucket = "tfstate-intent-guard-shivam-27087"
+    key    = "infra/terraform.tfstate"
+    region = "ap-south-1"
+  }
+
 }
 
 provider "aws" {
