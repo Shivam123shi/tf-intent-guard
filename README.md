@@ -34,6 +34,8 @@ Deterministic parser  ← no LLM
    • extracts the attribute that forced it
    • walks the dependency graph for blast radius
    • diffs before/after to see what changed inside updates
+   • flags security regressions (CIDR → 0.0.0.0/0, S3 public
+     access disabled, IAM policy widened to wildcard)
    ↓
 Intent check (Amazon Bedrock)  ← LLM
    • compares the PR description against the change list
@@ -50,11 +52,21 @@ Markdown comment posted on the PR
 
 "Did the author expect this?" has no field. It needs language understanding.
 
-The deterministic layer also **overrides** the model: if the plan contains destructive changes but the model says "aligned," the comment shows a warning rather than a green tick. The model can be wrong; the plan JSON cannot.
+### Two kinds of override
+
+The deterministic layer overrides the model in two situations:
+
+**Destructive changes.** If the plan destroys resources but the model says "aligned," the comment shows a warning rather than a green tick.
+
+**Security regressions.** Three checks run in pure Python and force a `diverged` verdict regardless of what the model concluded: an ingress CIDR becoming `0.0.0.0/0`, an S3 public-access protection being switched off, and an IAM policy widening to a wildcard.
+
+These fire even when the intent declares them honestly. A wildcard IAM grant is worth a reviewer's attention whether or not the author mentioned it — the tool surfaces, the human decides.
+
+This was added after a measured failure: the model was shown `10.0.0.0/16 => 0.0.0.0/0` in plain text and returned "aligned." Whether a CIDR is `0.0.0.0/0` is a fact sitting in the plan JSON. Asking a language model was the wrong architecture.
 
 ## Accuracy
 
-Measured over 7 labelled scenarios, 5 runs each, on `amazon.nova-lite-v1:0`:
+Measured over 9 labelled scenarios, 5 runs each, on `amazon.nova-lite-v1:0`:
 
 ```
 STABLE PASS  5/5  dynamodb: rename field - should warn
@@ -64,16 +76,20 @@ STABLE PASS  5/5  s3: replace bucket deliberately - should stay quiet
 STABLE PASS  5/5  safe: lifecycle change - should stay quiet
 STABLE PASS  5/5  smuggled: iam widening hidden behind tag change
 STABLE PASS  5/5  declared: iam widening stated honestly
+STABLE PASS  5/5  security: cidr opened to internet, hidden
+STABLE PASS  5/5  security: cidr opened, declared honestly
 
-Overall accuracy: 86%
-Fully stable cases: 6/7
+Overall accuracy: 89%
+Fully stable cases: 8/9
 ```
+
+Cases handled by the deterministic layer have zero variance by construction. The remaining variance is entirely in the model-dependent cases.
 
 ### Known failure mode
 
 The S3 bucket rename case fails consistently. The model reads `bucket: old-name => new-name`, sees it match the stated intent word for word, and treats the delete/create as the mechanism rather than a surprise. The equivalent DynamoDB case passes because `hash_key: a => b` doesn't look like an identity change.
 
-Nova Pro was tested and scored **worse** (4/7) — it broke cases Lite handles. More expensive is not automatically better for this task.
+Nova Pro was tested and scored **worse** (4/7 on the original suite) — it broke cases Lite handles. More expensive is not automatically better for this task.
 
 Every case is run 5 times because verdicts on borderline cases flip between runs even at `temperature: 0`. Single-run testing produces numbers that look precise and mean nothing.
 
@@ -90,7 +106,7 @@ Identical infrastructure change, opposite correct answers. This is what distingu
 
 ## Security
 
-GitHub authenticates to AWS via **OIDC federation** — no long-lived access keys are stored anywhere in the repository or in GitHub Secrets. The workflow assumes a role scoped to this repo, with read-only permissions for S3, DynamoDB, and IAM, plus `bedrock:InvokeModel`. Credentials expire in one hour.
+GitHub authenticates to AWS via **OIDC federation** — no long-lived access keys are stored anywhere in the repository or in GitHub Secrets. The workflow assumes a role scoped to this repo, with read-only permissions for S3, DynamoDB, EC2, and IAM, plus `bedrock:InvokeModel`. Credentials expire in one hour.
 
 The workflow only ever runs `terraform plan`. It has no write permissions on any resource.
 
@@ -118,7 +134,8 @@ Terraform · Python · AWS Bedrock · GitHub Actions · IAM/OIDC · boto3 · S3 
 
 ## Limitations
 
-- 7 test cases is a small sample; the 86% figure has wide error bars
+- 9 test cases is a small sample; the 89% figure has wide error bars
 - Only tested against the AWS provider
 - Cascade detection occasionally still flags knock-on changes as separate findings
+- The security checks cover three patterns; there are many more worth adding
 - No handling for multi-module plans

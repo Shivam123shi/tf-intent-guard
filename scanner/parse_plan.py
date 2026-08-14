@@ -24,6 +24,7 @@ def extract_changes(plan):
             "replace_paths": rc["change"].get("replace_paths", []),
             "reason": rc.get("action_reason", ""),
             "diffs": diff_attributes(rc),
+            "security": detect_security_regressions(rc),
         })
 
     return changes
@@ -187,6 +188,61 @@ def render_markdown(intent, changes, result):
     lines.append(f"<sub>Stated intent: {intent}</sub>")
 
     return "\n".join(lines)
+
+def detect_security_regressions(rc):
+    """Facts about danger that code can determine perfectly. No LLM."""
+    before = rc["change"].get("before") or {}
+    after = rc["change"].get("after") or {}
+    found = []
+
+    # CIDR opened to the whole internet
+    def public_cidrs(block):
+        opened = []
+        for rule in block or []:
+            if not isinstance(rule, dict):
+                continue
+            for cidr in rule.get("cidr_blocks") or []:
+                if cidr in ("0.0.0.0/0", "::/0"):
+                    opened.append(
+                        f"port {rule.get('from_port')}-{rule.get('to_port')}"
+                    )
+        return opened
+
+    was_open = set(public_cidrs(before.get("ingress")))
+    now_open = set(public_cidrs(after.get("ingress")))
+
+    for newly in sorted(now_open - was_open):
+        found.append(
+            f"Ingress opened to the entire internet (0.0.0.0/0) on {newly}"
+        )
+
+    # S3 public access protections switched off
+    for field in ("block_public_acls", "block_public_policy",
+                  "ignore_public_acls", "restrict_public_buckets"):
+        if before.get(field) is True and after.get(field) is False:
+            found.append(f"S3 public access protection disabled: {field}")
+
+    # IAM policy widened to a wildcard
+    if "policy" in before and "policy" in after:
+        b = json.dumps(before.get("policy") or "")
+        a = json.dumps(after.get("policy") or "")
+        if '\\"*\\"' not in b and '\\"*\\"' in a:
+            found.append("IAM policy widened to a wildcard (*)")
+
+    return found
+
+def apply_overrides(result, changes):
+    hits = [(c["address"], s) for c in changes for s in c.get("security", [])]
+    if hits:
+        result["verdict"] = "diverged"
+        result["summary"] = f"{len(hits)} security regression(s) detected by static analysis."
+        for addr, msg in hits:
+            result.setdefault("unexplained", []).append({
+                "resource": addr,
+                "why": f"[deterministic] {msg}"
+            })
+    return result
+
 def main():
     plan_path = sys.argv[1]
     intent = sys.argv[2]
@@ -230,6 +286,7 @@ def main():
         print(f"  Could not parse model response: {e}")
         print(f"  Raw: {raw}")
         return
+    result = apply_overrides(result, changes)
 
     print(f"  VERDICT: {result['verdict'].upper()}")
     print(f"  {result['summary']}\n")

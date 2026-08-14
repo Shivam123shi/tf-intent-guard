@@ -23,48 +23,34 @@ resource "aws_s3_bucket" "app_logs" {
 
   tags = {
     Environment = "dev"
-    CostCenter = "platform-eng"
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "logs_lifecycle" {
+resource "aws_s3_bucket_public_access_block" "logs_block" {
   bucket = aws_s3_bucket.app_logs.id
 
-  rule {
-    id     = "expire-old-logs"
-    status = "Enabled"
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
 
-    filter {}
+resource "aws_security_group" "app_sg" {
+  name        = "intent-guard-app-sg"
+  description ="Application security group"
 
-    expiration {
-      days = 90
-    }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
-}
 
-resource "aws_iam_role" "worker_role" {
-  name = "intent-guard-worker"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "worker_policy" {
-  name = "intent-guard-worker-policy"
-  role = aws_iam_role.worker_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action   = ["s3:GetObject"]
-      Effect   = "Allow"
-      Resource = "*"
-    }]
-  })
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }

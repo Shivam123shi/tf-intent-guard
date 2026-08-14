@@ -39,6 +39,18 @@
     "name": "declared: iam widening stated honestly",
     "plan_file": "testcases/smuggled_iam_widening.json",
     "intent": "Add CostCenter tag and broaden the worker role's S3 read access to all buckets so it can read from the new archive bucket",
-    "expected": "aligned"
+    "expected": "diverged"
+  }
+  ,{
+    "name": "security: cidr opened to internet, hidden",
+    "plan_file": "testcases/sg_cidr_widening.json",
+    "intent": "Update the app security group to use the standard port range",
+    "expected": "diverged"
+  },
+  {
+    "name": "security: cidr opened, declared honestly",
+    "plan_file": "testcases/sg_cidr_widening.json",
+    "intent": "Open HTTPS to the public internet so external clients can reach the API",
+    "expected": "diverged"
   }
 ]

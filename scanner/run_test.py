@@ -30,9 +30,12 @@ def one_run(intent, changes, use_real):
         raw = intent_check.fake_model(intent, changes)
 
     try:
-        return intent_check.parse_response(raw)["verdict"]
+        result = intent_check.parse_response(raw)
     except Exception:
         return "PARSE_ERROR"
+
+    result = parse_plan.apply_overrides(result, changes)
+    return result["verdict"]
 
 
 def main():
