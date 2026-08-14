@@ -5,6 +5,12 @@ terraform {
       version = "~> 5.0"
     }
   }
+  backend "s3" {
+    bucket = "tfstate-intent-guard-shivam-27087"
+    key    = "infra/terraform.tfstate"
+    region = "ap-south-1"
+  }
+
 }
 
 provider "aws" {
@@ -12,7 +18,7 @@ provider "aws" {
 }
 
 resource "aws_s3_bucket" "app_logs" {
-  bucket        = "intent-guard-logs-shivam-27087"
+  bucket        = "intent-guard-newlogs-shivam-27087"
   force_destroy = true
 
   tags = {
