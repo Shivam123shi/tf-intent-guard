@@ -5,3 +5,4 @@ tfplan.binary
 plan.json
 __pycache__/
 .terraform.lock.hcl
+comment.md

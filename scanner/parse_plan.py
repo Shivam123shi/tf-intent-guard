@@ -132,6 +132,61 @@ def summarise(value):
         return text[:300] + "...(truncated)"
 
     return text
+
+def render_markdown(intent, changes, result):
+    lines = []
+
+    destructive = [c for c in changes if label(c["actions"]) in ("REPLACE", "DELETE")]
+
+    if result["verdict"] == "diverged":
+        lines.append("## ⚠️ Changes not explained by the PR description")
+    elif destructive:
+        lines.append("## ⚠️ Destructive changes present — review carefully")
+        lines.append("")
+        lines.append("_The intent check found no divergence, but this plan destroys "
+                     "resources. Confirm this is intended before merging._")
+    else:
+        lines.append("## ✅ Plan matches the stated intent")
+
+    lines.append("")
+    lines.append(f"**{result['summary']}**")
+    lines.append("")
+
+    findings = result.get("unexplained", [])
+    if findings:
+        lines.append("| Resource | Concern |")
+        lines.append("|---|---|")
+        for f in findings:
+            why = f["why"].replace("|", "\\|")
+            lines.append(f"| `{f['resource']}` | {why} |")
+        lines.append("")
+
+    if destructive:
+        lines.append("### Destructive changes in this plan")
+        lines.append("")
+        for c in destructive:
+            attrs = [p[0] for p in c["replace_paths"] if p]
+            cause = f" — forced by `{', '.join(attrs)}`" if attrs else ""
+            lines.append(f"- **{label(c['actions'])}** `{c['address']}`{cause}")
+
+            if c["dependents"]:
+                lines.append(f"  - Blast radius: {len(c['dependents'])} dependent resource(s)")
+                for d in c["dependents"]:
+                    lines.append(f"    - `{d}`")
+        lines.append("")
+
+    lines.append("<details><summary>Full change list</summary>")
+    lines.append("")
+    lines.append("| Action | Resource |")
+    lines.append("|---|---|")
+    for c in changes:
+        lines.append(f"| {label(c['actions'])} | `{c['address']}` |")
+    lines.append("")
+    lines.append("</details>")
+    lines.append("")
+    lines.append(f"<sub>Stated intent: {intent}</sub>")
+
+    return "\n".join(lines)
 def main():
     plan_path = sys.argv[1]
     intent = sys.argv[2]
@@ -182,6 +237,10 @@ def main():
     for item in result.get("unexplained", []):
         print(f"  ! {item['resource']}")
         print(f"    {item['why']}")
+
+    if "--markdown" in sys.argv:
+        with open("comment.md", "w", encoding="utf-8") as f:
+            f.write(render_markdown(intent, changes, result))
 
     print()
 if __name__ == "__main__":

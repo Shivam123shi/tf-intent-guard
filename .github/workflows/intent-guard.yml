@@ -18,13 +18,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Debug OIDC claim
-        run: |
-          echo "repository: ${{ github.repository }}"
-          echo "repository_owner: ${{ github.repository_owner }}"
-          echo "ref: ${{ github.ref }}"
-          echo "event_name: ${{ github.event_name }}"
-
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -58,18 +51,17 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          python ../scanner/parse_plan.py plan.json "$PR_TITLE. $PR_BODY" --real > result.txt
-          cat result.txt
+          python ../scanner/parse_plan.py plan.json "$PR_TITLE. $PR_BODY" --real --markdown
 
       - name: Comment on PR
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const output = fs.readFileSync('infra/result.txt', 'utf8');
+            const output = fs.readFileSync('infra/comment.md', 'utf8');
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '## Terraform Intent Guard\n\n```\n' + output + '\n```'
+              body: output
             });
